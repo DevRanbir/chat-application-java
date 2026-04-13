@@ -1,68 +1,64 @@
-# Chat Application (Group Chat, Java Sockets)
+# Chat Application (Java Sockets + Full Desktop GUI)
 
-This is a console-based group chat application built with Java sockets.
+This project now includes both:
 
-It has two modules:
+1. Legacy console chat client and server.
+2. Full desktop GUI client and GUI admin server dashboard.
 
-- `server_side`: runs the chat server
-- `client_side`: runs chat clients
+The networking layer was refactored for better thread safety and smoother behavior while preserving compatibility with legacy clients.
 
-All messages are broadcast to all connected clients.
+## Modules
 
-## What Is Happening
+1. `server_side`
+: Contains a refactored server core, console launcher, and JavaFX admin dashboard.
+2. `client_side`
+: Contains legacy console client plus JavaFX GUI client with modern UX.
 
-1. Server starts and listens on a TCP port (default `5055`).
-2. Server prints local IPv4 addresses so you know what IP clients should use.
-3. Multiple clients connect to the same server IP and port.
-4. Any message from a client is broadcast to everyone.
-5. If a client sends `quit`, server sends `quited` and all connected clients exit.
+## Key Improvements Implemented
 
-## How It Is Happening
+1. Sender-only quit behavior:
+: `quit` now disconnects only the sender instead of forcing all clients out.
+2. Join/leave system notifications:
+: Server emits system notices when users join, rename, or leave.
+3. Connected users support:
+: Server tracks active users and broadcasts user lists to GUI clients.
+4. Server admin controls:
+: Admin GUI can disconnect selected clients and perform controlled global shutdown.
+5. Client auto-reconnect:
+: GUI client retries automatically on dropped connection.
+6. Chat export:
+: GUI client can export timeline to `.txt`.
+7. Theme switcher:
+: GUI client and server dashboard provide light/dark theme toggle.
 
-### Server behavior
+## Runtime Entry Points
 
-- Uses `ServerSocket` to accept incoming connections.
-- Stores each connection output stream in a hashtable.
-- Starts one `ServerThread` per connected client.
-- Each thread reads incoming UTF messages in format:
-  - `sender content...`
-- Broadcasts each normal message to all clients.
+1. Console server:
+: `chat_app.Server`
+2. Console client:
+: `chat_app.Client`
+3. GUI server admin:
+: `chat_app.ServerAdminApp`
+4. GUI client:
+: `chat_app.ClientGuiApp`
 
-### Client behavior
+## Protocol Notes
 
-- Connects to server host and port.
-- Starts one background receive thread.
-- Main thread reads terminal input and sends:
-  - `name content...`
-- Prints all received messages as:
-  - `sender:content`
+The server supports both legacy and GUI framing.
 
-## Message Protocol
-
-- Normal message:
-  - `sender content...`
-  - Example: `Bob hello everyone`
-- Exit message from client:
-  - `sender quit`
-- Server shutdown notification to all clients:
-  - `quited`
-
-## Project Structure
-
-```
-chat-application-master/
-  client_side/
-    src/chat_app/Client.java
-    bin/
-  server_side/
-    src/chat_app/Server.java
-    bin/
-```
+1. Legacy client format:
+: `sender content...`
+2. GUI client frames:
+: `CLIENT_HELLO|<encoded-name>`, `CLIENT_CHAT|<encoded-content>`, `CLIENT_QUIT`
+3. GUI server frames:
+: `SERVER_CHAT|...`, `SERVER_SYSTEM|...`, `SERVER_USERS|...`, `SERVER_SHUTDOWN|...`
+4. Legacy shutdown compatibility:
+: Server still emits `quited` for legacy clients on global shutdown.
 
 ## Requirements
 
-- Java JDK 8 or newer
-- Terminal/console access
+1. Java JDK 21+ (tested with JDK 25).
+2. JavaFX SDK installed locally (required for GUI launch and GUI compile).
 
 Check Java:
 
@@ -71,103 +67,97 @@ javac -version
 java -version
 ```
 
+## JavaFX Setup (Windows PowerShell)
+
+Set this environment variable to your JavaFX SDK `lib` folder:
+
+```powershell
+$env:JAVAFX_LIB="C:\path\to\javafx-sdk-23\lib"
+```
+
 ## Build
 
-From project root:
+### Server core (console-compatible)
 
-```bash
+```powershell
 cd server_side
-javac -d bin src/chat_app/Server.java
+javac -d bin src/chat_app/ClientSessionInfo.java src/chat_app/ServerEventListener.java src/chat_app/ChatServerCore.java src/chat_app/Server.java
+```
 
-cd ../client_side
-javac -d bin src/chat_app/Client.java
+### Client core (console-compatible)
+
+```powershell
+cd client_side
+javac -d bin src/chat_app/Client.java src/chat_app/ConnectionState.java src/chat_app/ChatMessage.java src/chat_app/ChatClientListener.java src/chat_app/ChatClientService.java
+```
+
+### Server GUI build
+
+```powershell
+cd server_side
+javac --module-path "$env:JAVAFX_LIB" --add-modules javafx.controls,javafx.graphics -d bin src/chat_app/*.java
+```
+
+### Client GUI build
+
+```powershell
+cd client_side
+javac --module-path "$env:JAVAFX_LIB" --add-modules javafx.controls,javafx.graphics -d bin src/chat_app/*.java
 ```
 
 ## Run
 
-### 1. Start server
+### Console server
 
-```bash
+```powershell
 cd server_side
-java -cp bin chat_app.Server
-```
-
-Or custom port:
-
-```bash
 java -cp bin chat_app.Server 5055
 ```
 
-Server startup now prints connect hints, for example:
+### Console client
 
-```text
-Server started.
-Clients can connect using one of these local IPv4 addresses:
-- 192.168.1.20:5055
-Listening on port 5055
+```powershell
+cd client_side
+java -cp bin chat_app.Client Alice 127.0.0.1 5055
 ```
 
-### 2. Start clients
+### GUI server admin dashboard
 
-Client command format:
-
-```text
-java -cp bin chat_app.Client <name> [server_host] [server_port]
+```powershell
+cd server_side
+java --module-path "$env:JAVAFX_LIB" --add-modules javafx.controls,javafx.graphics -cp bin chat_app.ServerAdminApp
 ```
 
-The exact style you asked for:
+### GUI client
 
-```text
-java -cp bin chat_app.Client Bob 192.168.1.20 5055
+```powershell
+cd client_side
+java --module-path "$env:JAVAFX_LIB" --add-modules javafx.controls,javafx.graphics -cp bin chat_app.ClientGuiApp
 ```
 
-More examples:
+## Seamless Mixed Usage
 
-```text
-java -cp bin chat_app.Client Alice
-java -cp bin chat_app.Client Alice 192.168.1.20
-java -cp bin chat_app.Client Alice 192.168.1.20 5055
-```
+You can run GUI and console clients together against the same server core.
 
-## LAN and Internet Usage
+1. GUI users get user list, themed bubbles, status updates, and export.
+2. Console users continue using plain `name message` behavior.
+3. Global shutdown from admin dashboard informs GUI clients and remains backward-compatible for legacy clients.
 
-### LAN (same network)
+## Known Remaining Limitations
 
-1. Run server on machine A.
-2. Note the IP shown by server (example `192.168.1.20`).
-3. Run clients on any machine in same LAN using that IP.
-
-### Internet (different networks)
-
-1. Run server on a machine with stable internet access.
-2. Open firewall for TCP port `5055` (or your chosen port).
-3. Configure router port forwarding to server machine.
-4. Remote clients connect to your public IP.
-
-## Known Limitations
-
-- No authentication.
-- No encryption (plaintext traffic).
-- If one user sends `quit`, all users are forced to exit.
-- No user list or join/leave notifications.
+1. No authentication.
+2. No encryption (plaintext TCP).
+3. No file transfer.
+4. No database persistence; chat history is in-memory during runtime.
 
 ## Troubleshooting
 
-### `ClassNotFoundException`
-
-- Re-compile first.
-- Ensure classpath points to `bin`.
-
-### `Address already in use: bind`
-
-- Another process is already using the port.
-- Stop it or choose another port.
-
-### Cannot connect from another machine
-
-- Verify server IP and port.
-- Check firewall rules.
-- Check router port forwarding for internet access.
+1. `package javafx... does not exist`
+: JavaFX SDK is not configured. Set `JAVAFX_LIB` correctly and rebuild.
+2. `Address already in use: bind`
+: Another process is using the server port. Choose a different port.
+3. GUI cannot connect
+: Check host, port, firewall, and server status label in admin dashboard.
 
 ## License
 

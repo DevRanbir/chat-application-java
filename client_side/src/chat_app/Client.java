@@ -9,7 +9,6 @@ import java.util.Scanner;
 		private DataOutputStream output;
 		private DataInputStream input;
 		String name;
-		@SuppressWarnings("null")
 		Client(String host, int port,String name){
 			String ur_message = null;	
 			this.name=name;
@@ -27,6 +26,13 @@ import java.util.Scanner;
                 	if(ur_message.equals("quit")) {
 	                		processMessage(name+" "+ur_message);
                 		System.out.println("you quited the communicaton");
+	                		try {
+	                			if (socket != null && !socket.isOutputShutdown()) {
+	                				socket.shutdownOutput();
+	                			}
+	                		} catch (IOException ie) {
+	                			System.out.println(ie);
+	                		}
                 		break;
                 		}
                 	else
@@ -40,6 +46,7 @@ import java.util.Scanner;
 	private void processMessage( String message ) {
 		try {
 			output.writeUTF( message );
+			output.flush();
 			} catch( IOException ie ) {
 				System.out.println( ie );
 			}
@@ -66,7 +73,30 @@ import java.util.Scanner;
 		    }
 			} 
 		} catch( IOException ie ) {
-				System.out.println( ie );
+				closeConnection();
+			}
+		}
+		private void closeConnection() {
+			try {
+				if (input != null) {
+					input.close();
+				}
+			} catch (IOException ie) {
+				System.out.println(ie);
+			}
+			try {
+				if (output != null) {
+					output.close();
+				}
+			} catch (IOException ie) {
+				System.out.println(ie);
+			}
+			try {
+				if (socket != null && !socket.isClosed()) {
+					socket.close();
+				}
+			} catch (IOException ie) {
+				System.out.println(ie);
 			}
 		}
 		public static void main(String args[]) {
